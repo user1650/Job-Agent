@@ -2,6 +2,10 @@
 
 An intelligent LangGraph-powered AI Agent that acts as your personal job hunting assistant. DeepAgent chats with you to understand your exact career goals (role, location, strict contract filters) and then automatically launches a headless Chromium browser using `browser-use` to scrape relevant job postings from the web.
 
+## Agent Graph
+
+![DeepAgent LangGraph Architecture](graph_image.png)
+
 ## Features
 
 - 🧠 **LangGraph Orchestration**: Uses a Human-in-the-Loop ReAct agent that asks clarifying questions before launching the scraping workflow.
