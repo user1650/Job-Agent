@@ -136,13 +136,11 @@ export function Message({ message }) {
         {/* Avatar */}
         <div
           className={cn(
-            "flex h-8 w-8 shrink-0 items-center justify-center rounded-lg mt-0.5",
-            isUser
-              ? "bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-sm"
-              : "bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-sm"
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg mt-0.5 border border-border",
+            isUser ? "bg-muted" : "bg-muted"
           )}
         >
-          {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+          {isUser ? <User className="h-4 w-4 text-muted-foreground" /> : <Bot className="h-4 w-4 text-muted-foreground" />}
         </div>
 
         {/* Content */}

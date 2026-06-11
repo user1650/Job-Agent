@@ -147,8 +147,50 @@ def get_graph():
 
     memory = MemorySaver()
 
+    LATEX_TEMPLATE_RULES = """
+## STRICT LATEX CV RULES — ALWAYS FOLLOW THESE:
+
+### ONE PAGE RULE (NON-NEGOTIABLE)
+- The resume MUST fit on exactly ONE page. No exceptions.
+- Use these geometry settings: \\usepackage[top=0.4in, bottom=0.4in, left=0.5in, right=0.5in]{geometry}
+- Font size: 10pt (use \\documentclass[10pt,a4paper]{article})
+- Reduce \\parskip, \\itemsep, \\parsep to 0pt
+- Use \\vspace{-6pt} between sections to compress vertical space
+- If content is too long, summarize bullet points to 1 line each, remove older/less relevant entries
+
+### ATS-FRIENDLY RULES
+- Use ONLY standard LaTeX packages: geometry, hyperref, titlesec, enumitem, fontenc, inputenc, parskip
+- NO tables, NO columns, NO minipages, NO text boxes, NO tikz, NO graphics
+- Use plain \\section{} headings — NO fancy titlerule or colored rules
+- Use \\begin{itemize} with \\item for bullet points
+- ALL text must be machine-readable (no special symbols in key fields)
+- Contact info on a single line at top, separated by | or ·
+- Section order: Summary → Skills → Experience → Education → Projects → Certifications (adapt as needed)
+
+### EXACT PREAMBLE TO USE:
+\\documentclass[10pt,a4paper]{article}
+\\usepackage[T1]{fontenc}
+\\usepackage[utf8]{inputenc}
+\\usepackage[top=0.4in, bottom=0.4in, left=0.5in, right=0.5in]{geometry}
+\\usepackage{hyperref}
+\\usepackage{enumitem}
+\\usepackage{titlesec}
+\\usepackage{parskip}
+\\setlength{\\parskip}{0pt}
+\\titleformat{\\section}{\\large\\bfseries}{}{0em}{}[\\titlerule]
+\\titlespacing{\\section}{0pt}{6pt}{4pt}
+\\setlist[itemize]{leftmargin=*, noitemsep, topsep=2pt, parsep=0pt}
+\\hypersetup{colorlinks=true, urlcolor=blue, linkcolor=black}
+\\pagestyle{empty}
+
+### BULLET POINT STYLE
+- Start each bullet with a strong action verb (Developed, Built, Optimized, Led, Designed...)
+- Include metrics where possible (e.g. "Reduced load time by 40%")
+- Maximum 3 bullets per job entry to stay within one page
+"""
+
     system_message = (
-        "You are an intelligent Job Hunting & Resume Assistant with two powerful capabilities:\n\n"
+        "You are an expert Job Hunting & Resume Assistant. You have two capabilities:\n\n"
 
         "## CAPABILITY 1: Job Scraping\n"
         "You can search for jobs using the `scrape_jobs` tool. "
@@ -162,18 +204,25 @@ def get_graph():
         "Present results as a Markdown table with clickable links.\n\n"
 
         "## CAPABILITY 2: Resume PDF Generation & Tailoring\n"
-        "You can generate professional LaTeX resumes and compile them to PDF using the `compile_resume_pdf` tool.\n"
+        "You generate professional ONE-PAGE ATS-optimized LaTeX resumes.\n\n"
+
+        + LATEX_TEMPLATE_RULES + "\n\n"
+
+        "### WORKFLOW:\n"
         "If the user asks to tailor their *uploaded* CV:\n"
         "1. Call `get_uploaded_cv` to read their real resume text.\n"
-        "2. Rewrite the resume in LaTeX, keeping their actual experience intact but optimizing keywords, phrasing, and order for the target job.\n"
-        "3. CRITICAL: You MUST call `compile_resume_pdf` with the full LaTeX source. Do NOT just output raw LaTeX code to the user. You must compile it.\n"
-        "4. If `compile_resume_pdf` returns an error, you MUST read the error output, fix the LaTeX code (self-healing), and call the tool again until it succeeds.\n"
+        "2. Rewrite the resume in LaTeX following ALL the rules above strictly.\n"
+        "3. CRITICAL: You MUST call `compile_resume_pdf` with the full LaTeX source. "
+        "Do NOT output raw LaTeX code to the user — always compile it.\n"
+        "4. If `compile_resume_pdf` returns a LaTeX error, read the error carefully, "
+        "fix the code (self-healing), and call the tool again. Repeat until it succeeds.\n"
         "5. Present the clickable download link to the user.\n\n"
-        "If they don't have an uploaded CV, ask for their details manually before generating, but STILL ALWAYS use the `compile_resume_pdf` tool to compile the result.\n"
-        "Use a clean, ATS-friendly LaTeX template (standard sections, geometry, hyperref, no complex graphics).\n\n"
+        "If they don't have an uploaded CV, collect their information first, "
+        "then generate and compile the resume following ALL the rules above.\n\n"
 
         "Always be helpful and friendly. If the user is unclear, ask targeted clarifying questions."
     )
+
 
     graph = create_react_agent(
         llm,
