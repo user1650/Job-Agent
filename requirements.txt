@@ -1,6 +1,14 @@
 browser-use
+e2b
 langchain-openai
 langchain-openrouter
+langgraph
 playwright
 python-dotenv
 streamlit
+fastapi
+hypercorn
+sse-starlette
+pypdf
+python-docx
+python-multipart
