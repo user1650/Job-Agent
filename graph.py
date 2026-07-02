@@ -143,14 +143,18 @@ def get_uploaded_cv(config: RunnableConfig) -> str:
 # ─────────────────────────────────────────────────────────────
 # LangGraph Agent Graph
 # ─────────────────────────────────────────────────────────────
-def get_graph():
+async def get_graph():
     llm = ChatOpenAI(
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY"),
         model="openai/gpt-4o",
     )
 
-    memory = SqliteSaver.from_conn_string(DB_PATH)
+    import aiosqlite
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+    conn = await aiosqlite.connect(DB_PATH)
+    memory = AsyncSqliteSaver(conn)
+    await memory.setup()
 
     LATEX_TEMPLATE_RULES = """
 ## STRICT LATEX CV RULES — ALWAYS FOLLOW THESE:

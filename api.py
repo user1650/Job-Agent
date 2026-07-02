@@ -56,10 +56,11 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 _graph = None
 
 
-def get_shared_graph():
+async def get_shared_graph():
     global _graph
     if _graph is None:
-        _graph = get_graph()
+        from graph import get_graph
+        _graph = await get_graph()
     return _graph
 
 
@@ -127,10 +128,10 @@ async def get_session_messages(session_id: str):
     Return chat messages for a session by replaying the LangGraph state.
     Each message is {role: 'user'|'assistant', content: str}.
     """
-    graph = get_shared_graph()
+    graph = await get_shared_graph()
     config = {"configurable": {"thread_id": session_id}}
     try:
-        state = graph.get_state(config)
+        state = await graph.aget_state(config)
         raw_messages = state.values.get("messages", []) if state.values else []
     except Exception:
         raw_messages = []
@@ -161,7 +162,7 @@ PDF_URL_RE = re.compile(r"PDF_URL:\s*(https?://\S+\.pdf)")
 @app.post("/chat")
 async def chat(req: ChatRequest):
     thread_id = req.thread_id or str(uuid.uuid4())
-    graph = get_shared_graph()
+    graph = await get_shared_graph()
     config = {"configurable": {"thread_id": thread_id}}
 
     # Auto-create session in DB if it doesn't exist yet
@@ -174,6 +175,7 @@ async def chat(req: ChatRequest):
 
     async def event_generator():
         try:
+            graph = await get_shared_graph()
             async for chunk in graph.astream(
                 {"messages": [("user", req.message)]},
                 config=config,

@@ -13,3 +13,4 @@ sse-starlette
 pypdf
 python-docx
 python-multipart
+aiosqlite
