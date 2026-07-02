@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from "react";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { Sidebar } from "@/components/Sidebar";
 import { ChatWindow } from "@/components/ChatWindow";
+import { PdfPreviewPanel } from "@/components/PdfPreviewPanel";
 import { useChat } from "@/hooks/useChat";
 import { useSessions } from "@/hooks/useSessions";
 
@@ -12,54 +13,55 @@ function AppContent() {
     setActiveSessionId,
     createSession,
     deleteSession,
-    updateSessionMessages,
-    getActiveSession,
+    refreshSessions,
+    loadingMessages,
+    setOnSessionMessagesLoaded,
   } = useSessions();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [cvFilename, setCvFilename] = useState("");
 
-  const activeSession = getActiveSession();
-
-  const handleMessagesChange = useCallback(
-    (sessionId, messages) => {
-      updateSessionMessages(sessionId, messages);
-    },
-    [updateSessionMessages]
-  );
-
   const {
     messages,
     isStreaming,
     agentStatus,
+    pdfUrl,
     sendMessage,
     stopStreaming,
     resetMessages,
+    openPdfPreview,
+    closePdfPreview,
   } = useChat({
     threadId: activeSessionId || "",
-    initialMessages: activeSession?.messages || [],
-    onMessagesChange: handleMessagesChange,
+    initialMessages: [],
+    onAfterMessage: refreshSessions,
   });
 
-  // When switching sessions, reset messages to the new session's messages
+  // When the session hook loads messages from DB, inject them into the chat
   useEffect(() => {
-    if (activeSession) {
-      resetMessages(activeSession.messages || []);
-    }
-  }, [activeSessionId]); // eslint-disable-line react-hooks/exhaustive-deps
+    setOnSessionMessagesLoaded((msgs) => {
+      resetMessages(msgs);
+    });
+  }, [setOnSessionMessagesLoaded, resetMessages]);
 
-  const handleNewSession = useCallback(() => {
-    createSession();
+  const handleNewSession = useCallback(async () => {
+    await createSession();
   }, [createSession]);
 
   const handleDeleteSession = useCallback(
     async (id) => {
-      try {
-        await fetch(`http://localhost:8000/chat/${id}`, { method: "DELETE" }).catch(() => {});
-      } catch {}
-      deleteSession(id);
+      await deleteSession(id);
     },
     [deleteSession]
+  );
+
+  const handleSelectSession = useCallback(
+    (id) => {
+      if (id !== activeSessionId) {
+        setActiveSessionId(id);
+      }
+    },
+    [activeSessionId, setActiveSessionId]
   );
 
   return (
@@ -68,11 +70,12 @@ function AppContent() {
         sessions={sessions}
         activeSessionId={activeSessionId}
         onNewSession={handleNewSession}
-        onSelectSession={setActiveSessionId}
+        onSelectSession={handleSelectSession}
         onDeleteSession={handleDeleteSession}
         isOpen={sidebarOpen}
         onToggle={() => setSidebarOpen((p) => !p)}
       />
+
       <ChatWindow
         messages={messages}
         isStreaming={isStreaming}
@@ -82,7 +85,11 @@ function AppContent() {
         onStopStreaming={stopStreaming}
         cvFilename={cvFilename}
         onCvUploaded={setCvFilename}
+        onPdfReady={openPdfPreview}
+        loadingMessages={loadingMessages}
       />
+
+      <PdfPreviewPanel url={pdfUrl} onClose={closePdfPreview} />
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { Bot, User, FileDown, ExternalLink, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 
-function CodeBlock({ children, className }) {
+function CodeBlock({ children, className, onPdfReady }) {
   const [copied, setCopied] = useState(false);
   const [compiling, setCompiling] = useState(false);
   const text = String(children).replace(/\n$/, "");
@@ -26,13 +26,16 @@ function CodeBlock({ children, className }) {
         body: JSON.stringify({ latex: text }),
       });
       const data = await res.json();
-      const match = /\[.*?\]\((http:\/\/localhost:8000\/static\/resumes\/[^\)]+\.pdf)\)/.exec(data.message);
-      if (match) {
-        window.open(match[1], "_blank");
+      // Try to extract PDF URL from response
+      const urlMatch = /PDF_URL:\s*(https?:\/\/\S+\.pdf)/.exec(data.message);
+      const linkMatch = /\[.*?\]\((http:\/\/localhost:8000\/static\/resumes\/[^\)]+\.pdf)\)/.exec(data.message);
+      const url = urlMatch?.[1] || linkMatch?.[1];
+      if (url) {
+        onPdfReady?.(url);
       } else {
-        alert("Compilation failed:\\n" + data.message);
+        alert("Compilation failed:\n" + data.message);
       }
-    } catch(e) {
+    } catch (e) {
       alert("Error: " + e.message);
     }
     setCompiling(false);
@@ -83,8 +86,8 @@ function CodeBlock({ children, className }) {
   );
 }
 
-// Detect a PDF download link in the message content
-function PdfDownloadCard({ url, filename }) {
+// PDF download + preview card shown above message content
+function PdfDownloadCard({ url, filename, onPdfReady }) {
   return (
     <div className="my-4 flex items-center gap-4 rounded-xl border border-green-500/30 bg-green-500/10 p-4">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-500/20 text-green-400">
@@ -94,16 +97,27 @@ function PdfDownloadCard({ url, filename }) {
         <p className="text-sm font-semibold text-green-400">Resume Compiled Successfully!</p>
         <p className="text-xs text-muted-foreground truncate">{filename}</p>
       </div>
-      <Button
-        asChild
-        size="sm"
-        className="shrink-0 bg-green-600 hover:bg-green-700 text-white gap-2 rounded-lg"
-      >
-        <a href={url} target="_blank" rel="noopener noreferrer">
-          <ExternalLink className="h-4 w-4" />
-          Download PDF
-        </a>
-      </Button>
+      <div className="flex items-center gap-2 shrink-0">
+        <Button
+          size="sm"
+          variant="outline"
+          className="gap-2 rounded-lg text-xs border-green-500/40 text-green-400 hover:bg-green-500/10"
+          onClick={() => onPdfReady?.(url)}
+        >
+          <ExternalLink className="h-3.5 w-3.5" />
+          View
+        </Button>
+        <Button
+          asChild
+          size="sm"
+          className="shrink-0 bg-green-600 hover:bg-green-700 text-white gap-2 rounded-lg text-xs"
+        >
+          <a href={url} download={filename}>
+            <FileDown className="h-3.5 w-3.5" />
+            Download
+          </a>
+        </Button>
+      </div>
     </div>
   );
 }
@@ -121,7 +135,7 @@ function extractPdfLinks(content) {
   return matches;
 }
 
-export function Message({ message }) {
+export function Message({ message, onPdfReady }) {
   const isUser = message.role === "user";
   const pdfLinks = !isUser ? extractPdfLinks(message.content || "") : [];
 
@@ -155,7 +169,7 @@ export function Message({ message }) {
             <div className="prose prose-sm dark:prose-invert max-w-none text-sm break-words">
               {/* Render PDF download cards at the top */}
               {pdfLinks.map(({ url, filename }) => (
-                <PdfDownloadCard key={url} url={url} filename={filename} />
+                <PdfDownloadCard key={url} url={url} filename={filename} onPdfReady={onPdfReady} />
               ))}
 
               <ReactMarkdown
@@ -212,7 +226,7 @@ export function Message({ message }) {
                   code: ({ node, inline, className, children, ...props }) => {
                     const match = /language-(\w+)/.exec(className || '');
                     return !inline && match ? (
-                      <CodeBlock className={className}>{children}</CodeBlock>
+                      <CodeBlock className={className} onPdfReady={onPdfReady}>{children}</CodeBlock>
                     ) : (
                       <code className={cn("rounded-md bg-muted px-1.5 py-0.5 font-mono text-xs", className)} {...props}>
                         {children}

@@ -1,0 +1,15 @@
+.venv
+venv
+env
+__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.git
+.gitignore
+data/
+static/resumes/
+frontend/node_modules/
+frontend/dist/
+.env
+*.log

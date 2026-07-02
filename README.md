@@ -64,21 +64,22 @@ The agent has **self-healing LaTeX compilation** — if the LaTeX code fails to 
 
 ### 🤖 Agent
 - **ReAct pattern** — agent reasons, calls tools, observes results, iterates
-- **Persistent memory** via LangGraph `MemorySaver` (per session thread)
+- **Persistent memory** via LangGraph `SqliteSaver` (SQLite DB per session thread)
 - **Self-healing PDF compilation** — reads LaTeX errors and auto-fixes until success
 - **Strict prompting** — always compiles PDFs directly, never dumps raw LaTeX on the user
 
 ### 🖥️ Frontend (ChatGPT-style)
-- **Sidebar with session history** — all conversations persisted in `localStorage`
+- **Sidebar with session history** — all conversations persisted in the backend SQLite database (survives browser clears)
 - **Dark / Light mode** toggle — preference saved to `localStorage`
 - **Auto-resizing textarea** for composing messages
 - **Copy button** on every code block
-- **"Render PDF" button** on LaTeX code blocks — sends code to E2B and opens the compiled PDF
+- **Inline PDF Preview Panel** — generated resumes slide out from the right in a native iframe viewer
 - **PDF download card** — displayed prominently when a resume is ready
 - **CV upload indicator** in the header
 
 ### ⚡ Backend
 - **Server-Sent Events (SSE)** for real-time token streaming
+- **SQLite Database (`deepagent.db`)** — stores session metadata and LangGraph chat histories
 - **Static file serving** — compiled PDFs served from `/static/resumes/`
 - **`/compile` endpoint** — manually compile any LaTeX code via the frontend button
 - **`/upload-cv/{thread_id}`** — upload CV per session, parsed from PDF, DOCX or TXT
@@ -157,24 +158,35 @@ The script will print a **Template ID** and automatically write it to your `.env
 
 ## Running the Application
 
+### Option A: Docker (Recommended)
+
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
+
+```powershell
+# From project root
+docker-compose up --build -d
+```
+
+- App runs on **http://localhost:5173**
+- Backend API runs on **http://localhost:8000**
+- Database (`data/`) and PDFs (`static/resumes/`) are persisted via Docker volumes.
+
+### Option B: Manual Local Execution
+
 You need two terminals — one for the backend, one for the frontend.
 
-### Terminal 1 — Backend
-
+**Terminal 1 — Backend**
 ```powershell
 # From project root, with .venv activated
 python api.py
 ```
-
 Backend runs on **http://localhost:8000**
 
-### Terminal 2 — Frontend
-
+**Terminal 2 — Frontend**
 ```powershell
 cd frontend
 npm run dev
 ```
-
 Frontend runs on **http://localhost:5173**
 
 ---
@@ -207,11 +219,14 @@ Frontend runs on **http://localhost:5173**
 
 ```
 deepagent/
-├── api.py                  # FastAPI server — /chat, /compile, /upload-cv
+├── api.py                  # FastAPI server — /chat, /compile, /upload-cv, /sessions
+├── db.py                   # SQLite database layer for sessions
 ├── graph.py                # LangGraph agent — tools and system prompt
 ├── store.py                # In-memory CV store + file parsers
 ├── build_template.py       # E2B template builder (run once)
 ├── requirements.txt        # Python dependencies
+├── docker-compose.yml      # Docker compose configuration
+├── Dockerfile              # Backend docker image
 ├── .env                    # Secrets (not committed)
 ├── .env.example            # Template for secrets
 ├── template/
@@ -224,11 +239,12 @@ deepagent/
         ├── context/ThemeContext.jsx    # Dark/light mode provider
         ├── hooks/
         │   ├── useChat.js              # SSE streaming chat logic
-        │   └── useSessions.js          # Session CRUD + localStorage
+        │   └── useSessions.js          # Session CRUD via backend API
         └── components/
             ├── Sidebar.jsx             # ChatGPT-style session sidebar
             ├── ChatWindow.jsx          # Main chat area
             ├── Message.jsx             # Message renderer (Markdown, LaTeX, PDF)
+            ├── PdfPreviewPanel.jsx     # Inline PDF viewer
             └── CvUpload.jsx            # CV file uploader
 ```
 

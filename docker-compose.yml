@@ -1,0 +1,47 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: deepagent-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist SQLite database across container restarts
+      - deepagent-data:/app/data
+      # Persist compiled PDFs
+      - deepagent-resumes:/app/static/resumes
+    env_file:
+      - .env
+    environment:
+      - DATA_DIR=/app/data
+      - PDF_BASE_URL=http://localhost:8000
+      - FRONTEND_URL=http://localhost:5173
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: deepagent-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  deepagent-data:
+    name: deepagent-data
+  deepagent-resumes:
+    name: deepagent-resumes

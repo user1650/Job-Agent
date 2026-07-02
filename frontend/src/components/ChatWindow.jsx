@@ -14,6 +14,8 @@ export function ChatWindow({
   onStopStreaming,
   cvFilename,
   onCvUploaded,
+  onPdfReady,
+  loadingMessages,
 }) {
   const [input, setInput] = useState("");
   const bottomRef = useRef(null);
@@ -27,7 +29,8 @@ export function ChatWindow({
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + "px";
+      textareaRef.current.style.height =
+        Math.min(textareaRef.current.scrollHeight, 200) + "px";
     }
   }, [input]);
 
@@ -45,8 +48,18 @@ export function ChatWindow({
     }
   };
 
+  // Loading skeleton while switching sessions and fetching messages from DB
+  if (loadingMessages) {
+    return (
+      <div className="flex h-full flex-1 flex-col items-center justify-center gap-4 bg-background text-muted-foreground">
+        <Loader2 className="h-6 w-6 animate-spin text-violet-500" />
+        <p className="text-sm animate-pulse">Loading conversation...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-full flex-1 flex-col bg-background">
+    <div className="flex h-full flex-1 flex-col bg-background min-w-0">
       {/* Messages Area */}
       <ScrollArea className="flex-1">
         <div className="mx-auto max-w-3xl px-4">
@@ -56,9 +69,12 @@ export function ChatWindow({
                 <Sparkles className="h-8 w-8" />
               </div>
               <div>
-                <h2 className="text-2xl font-semibold tracking-tight">How can I help you today?</h2>
+                <h2 className="text-2xl font-semibold tracking-tight">
+                  How can I help you today?
+                </h2>
                 <p className="text-muted-foreground mt-2 text-sm max-w-md">
-                  Search for jobs, generate a professional PDF resume, or tailor your CV — all from one chat.
+                  Search for jobs, generate a professional PDF resume, or tailor
+                  your CV — all from one chat.
                 </p>
               </div>
 
@@ -101,13 +117,15 @@ export function ChatWindow({
           ) : (
             <div className="flex flex-col gap-1 py-6">
               {messages.map((msg) => (
-                <Message key={msg.id} message={msg} />
+                <Message key={msg.id} message={msg} onPdfReady={onPdfReady} />
               ))}
 
               {isStreaming && (
                 <div className="flex items-center gap-2.5 px-4 py-3 text-sm text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin text-violet-500" />
-                  <span className="animate-pulse">{agentStatus || "Processing..."}</span>
+                  <span className="animate-pulse">
+                    {agentStatus || "Processing..."}
+                  </span>
                 </div>
               )}
               <div ref={bottomRef} />

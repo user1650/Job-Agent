@@ -1,74 +1,122 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 
-const STORAGE_KEY = "deepagent-sessions";
-const ACTIVE_KEY = "deepagent-active-session";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-function loadSessions() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
-
-function saveSessions(sessions) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
-}
-
+/**
+ * useSessions — manages chat sessions via the backend SQLite API.
+ * localStorage is no longer used for session persistence.
+ */
 export function useSessions() {
-  const [sessions, setSessions] = useState(loadSessions);
-  const [activeSessionId, setActiveSessionId] = useState(
-    () => localStorage.getItem(ACTIVE_KEY) || null
-  );
+  const [sessions, setSessions] = useState([]);
+  const [activeSessionId, setActiveSessionId] = useState(null);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  // Callback ref: called when we need to load messages for a session into the chat
+  const onSessionMessagesLoadedRef = useRef(null);
 
-  // Save sessions whenever they change
+  // ──────────────────────────────────────────────────────
+  // Load sessions from API on mount
+  // ──────────────────────────────────────────────────────
   useEffect(() => {
-    saveSessions(sessions);
-  }, [sessions]);
-
-  // Save active session ID
-  useEffect(() => {
-    if (activeSessionId) {
-      localStorage.setItem(ACTIVE_KEY, activeSessionId);
-    }
-  }, [activeSessionId]);
-
-  // Ensure there's always an active session
-  useEffect(() => {
-    if (!activeSessionId || !sessions.find((s) => s.id === activeSessionId)) {
-      if (sessions.length > 0) {
-        setActiveSessionId(sessions[0].id);
-      } else {
-        // Create initial session
-        const id = crypto.randomUUID();
-        const newSession = { id, title: "New Chat", createdAt: Date.now(), messages: [] };
-        setSessions([newSession]);
-        setActiveSessionId(id);
+    let cancelled = false;
+    async function loadSessions() {
+      try {
+        const res = await fetch(`${API_URL}/sessions`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setSessions(data);
+        if (data.length > 0) {
+          setActiveSessionId(data[0].id);
+        } else {
+          // Create the first session
+          const newSession = await _createSessionAPI("New Chat");
+          if (!cancelled && newSession) {
+            setSessions([newSession]);
+            setActiveSessionId(newSession.id);
+          }
+        }
+      } catch (err) {
+        console.error("[useSessions] Failed to load sessions:", err);
       }
     }
-  }, [activeSessionId, sessions]);
+    loadSessions();
+    return () => { cancelled = true; };
+  }, []);
 
-  const createSession = useCallback(() => {
-    const id = crypto.randomUUID();
-    const newSession = { id, title: "New Chat", createdAt: Date.now(), messages: [] };
+  // ──────────────────────────────────────────────────────
+  // Load messages whenever active session changes
+  // ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!activeSessionId) return;
+    let cancelled = false;
+
+    async function loadMessages() {
+      setLoadingMessages(true);
+      try {
+        const res = await fetch(`${API_URL}/sessions/${activeSessionId}/messages`);
+        if (!res.ok || cancelled) return;
+        const messages = await res.json();
+        if (!cancelled) {
+          onSessionMessagesLoadedRef.current?.(messages);
+        }
+      } catch (err) {
+        console.error("[useSessions] Failed to load messages:", err);
+      } finally {
+        if (!cancelled) setLoadingMessages(false);
+      }
+    }
+
+    loadMessages();
+    return () => { cancelled = true; };
+  }, [activeSessionId]);
+
+  // ──────────────────────────────────────────────────────
+  // Internal helpers
+  // ──────────────────────────────────────────────────────
+  async function _createSessionAPI(title = "New Chat") {
+    try {
+      const res = await fetch(`${API_URL}/sessions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
+    }
+  }
+
+  // ──────────────────────────────────────────────────────
+  // Public API
+  // ──────────────────────────────────────────────────────
+  const createSession = useCallback(async () => {
+    const newSession = await _createSessionAPI("New Chat");
+    if (!newSession) return null;
     setSessions((prev) => [newSession, ...prev]);
-    setActiveSessionId(id);
-    return id;
+    setActiveSessionId(newSession.id);
+    return newSession.id;
   }, []);
 
   const deleteSession = useCallback(
-    (id) => {
+    async (id) => {
+      try {
+        await fetch(`${API_URL}/sessions/${id}`, { method: "DELETE" });
+      } catch {}
       setSessions((prev) => {
         const filtered = prev.filter((s) => s.id !== id);
         if (id === activeSessionId) {
           if (filtered.length > 0) {
             setActiveSessionId(filtered[0].id);
           } else {
-            // Create a new session if we deleted the last one
-            const newId = crypto.randomUUID();
-            const newSession = { id: newId, title: "New Chat", createdAt: Date.now(), messages: [] };
-            setActiveSessionId(newId);
-            return [newSession];
+            // Create a brand new session
+            _createSessionAPI("New Chat").then((s) => {
+              if (s) {
+                setSessions([s]);
+                setActiveSessionId(s.id);
+              }
+            });
+            return [];
           }
         }
         return filtered;
@@ -77,23 +125,26 @@ export function useSessions() {
     [activeSessionId]
   );
 
-  const updateSessionMessages = useCallback((sessionId, messages) => {
-    setSessions((prev) =>
-      prev.map((s) => {
-        if (s.id !== sessionId) return s;
-        // Auto-generate title from first user message
-        const firstUserMsg = messages.find((m) => m.role === "user");
-        const title = firstUserMsg
-          ? firstUserMsg.content.slice(0, 40) + (firstUserMsg.content.length > 40 ? "..." : "")
-          : s.title;
-        return { ...s, messages, title };
-      })
-    );
+  /**
+   * Called after each message by the chat to refresh the session list
+   * so the title and updated_at are kept current.
+   */
+  const refreshSessions = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/sessions`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setSessions(data);
+    } catch {}
   }, []);
 
-  const getActiveSession = useCallback(() => {
-    return sessions.find((s) => s.id === activeSessionId) || null;
-  }, [sessions, activeSessionId]);
+  /**
+   * Register a callback that fires whenever messages for the active session
+   * are fetched from the backend. Used by App.jsx to inject messages into useChat.
+   */
+  const setOnSessionMessagesLoaded = useCallback((fn) => {
+    onSessionMessagesLoadedRef.current = fn;
+  }, []);
 
   return {
     sessions,
@@ -101,7 +152,8 @@ export function useSessions() {
     setActiveSessionId,
     createSession,
     deleteSession,
-    updateSessionMessages,
-    getActiveSession,
+    refreshSessions,
+    loadingMessages,
+    setOnSessionMessagesLoaded,
   };
 }

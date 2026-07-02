@@ -3,6 +3,7 @@ e2b
 langchain-openai
 langchain-openrouter
 langgraph
+langgraph-checkpoint-sqlite
 playwright
 python-dotenv
 streamlit

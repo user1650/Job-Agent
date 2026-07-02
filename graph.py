@@ -6,7 +6,8 @@ from langchain_core.runnables import RunnableConfig
 from browser_use import Agent, Browser, ChatOpenAI as BrowserUseChatOpenAI
 from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+from db import DB_PATH
 
 RESUMES_DIR = Path("static/resumes")
 RESUMES_DIR.mkdir(parents=True, exist_ok=True)
@@ -106,10 +107,14 @@ def compile_resume_pdf(latex_code: str, filename: str = "resume") -> str:
 
             pdf_url = f"http://localhost:8000/static/resumes/{output_filename}"
             print(f"[E2B] PDF compiled successfully: {pdf_url}")
+            # Use PDF_BASE_URL env var so Docker networking works correctly
+            base_url = os.getenv("PDF_BASE_URL", "http://localhost:8000")
+            pdf_url = f"{base_url}/static/resumes/{output_filename}"
             return (
                 f"✅ Resume compiled successfully!\n\n"
                 f"📄 **[Click here to download your PDF]({pdf_url})**\n\n"
-                f"File: `{output_filename}`"
+                f"File: `{output_filename}`\n"
+                f"PDF_URL: {pdf_url}"
             )
 
     except Exception as e:
@@ -145,7 +150,7 @@ def get_graph():
         model="openai/gpt-4o",
     )
 
-    memory = MemorySaver()
+    memory = SqliteSaver.from_conn_string(DB_PATH)
 
     LATEX_TEMPLATE_RULES = """
 ## STRICT LATEX CV RULES — ALWAYS FOLLOW THESE:
